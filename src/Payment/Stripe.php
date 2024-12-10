@@ -27,7 +27,12 @@ class Stripe extends Payment
      */
     public function isAvailable(): bool
     {
-        return Cart::getCart()->grand_total >= 0.5;
+        $cart = Cart::getCart();
+        if (!$cart) {
+            return true;
+        }
+//        $this->cart?->haveStockableItems()
+        return $this?->getConfigData('active') && $cart->grand_total >= 0.5;
     }
 
     /**
