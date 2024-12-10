@@ -21,9 +21,10 @@ class PaymentController extends Controller
      * @var InvoiceRepository
      */
     public function __construct(
-        protected OrderRepository $orderRepository,
+        protected OrderRepository   $orderRepository,
         protected InvoiceRepository $invoiceRepository,
-    ) {
+    )
+    {
         //
     }
 
@@ -33,28 +34,21 @@ class PaymentController extends Controller
     public function redirect(): RedirectResponse
     {
         $cart = Cart::getCart();
-        $billingAddress = $cart->billing_address;
-
         Stripe::setApiKey(core()->getConfigData('sales.payment_methods.stripe.stripe_api_key'));
-
-        $shippingRate = $cart->selected_shipping_rate ? $cart->selected_shipping_rate->price : 0;
-        $discountAmount = $cart->discount_amount;
-        $totalAmount = $cart->grand_total;
-
         $checkoutSession = Session::create([
-            'line_items'           => [[
+            'line_items' => [[
                 'price_data' => [
-                    'currency'     => $cart->global_currency_code,
+                    'currency' => $cart->global_currency_code,
                     'product_data' => [
-                        'name' => 'Stripe Checkout Payment order id - '.$cart->id,
+                        'name' => 'Stripe Checkout Payment order id - ' . $cart->id,
                     ],
                     'unit_amount' => $cart->grand_total * 100,
                 ],
                 'quantity' => 1,
             ]],
-            'mode'        => 'payment',
+            'mode' => 'payment',
             'success_url' => route('stripe.success'),
-            'cancel_url'  => route('stripe.cancel'),
+            'cancel_url' => route('stripe.cancel'),
         ]);
 
         return redirect()->away($checkoutSession->url);
@@ -87,7 +81,7 @@ class PaymentController extends Controller
     {
         $invoiceData = [
             'order_id' => $order->id,
-            'invoice'  => ['items' => []],
+            'invoice' => ['items' => []],
         ];
 
         foreach ($order->items as $item) {
