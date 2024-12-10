@@ -12,5 +12,5 @@ Route::group(['middleware' => ['web', 'theme', 'locale', 'currency']], function 
 
     Route::get('/stripe-success', [PaymentController::class, 'success'])->name('stripe.success');
 
-    Route::post('/stripe-cancel', [PaymentController::class, 'failure'])->name('stripe.cancel');
+    Route::get('/stripe-cancel', [PaymentController::class, 'failure'])->name('stripe.cancel');
 });

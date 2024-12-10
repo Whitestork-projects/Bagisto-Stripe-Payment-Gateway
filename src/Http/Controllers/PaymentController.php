@@ -90,4 +90,11 @@ class PaymentController extends Controller
 
         return $invoiceData;
     }
+
+    public function failure()
+    {
+        session()->flash('error', __('stripe.payment_failed'));
+
+        return redirect()->route('shop.checkout.onepage.success');
+    }
 }
