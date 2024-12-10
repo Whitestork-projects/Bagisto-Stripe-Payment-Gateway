@@ -93,8 +93,7 @@ class PaymentController extends Controller
 
     public function failure()
     {
-        session()->flash('error', __('stripe.payment_failed'));
-
-        return redirect()->route('shop.checkout.onepage.success');
+        session()->flash('error', __('stripe::app.stripe.shop.payment_failed'));
+        return redirect()->route('shop.checkout.cart.index');
     }
 }
