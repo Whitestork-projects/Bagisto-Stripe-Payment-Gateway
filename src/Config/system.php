@@ -24,7 +24,7 @@ return [
                 'locale_based' => true,
             ],
             [
-                'name' => 'stripe_api_key',
+                'name' => 'api_key',
                 'title' => 'stripe::app.stripe.system.client-secret',
                 'info' => 'stripe::app.stripe.system.client-secret-info',
                 'type' => 'password',
@@ -34,7 +34,7 @@ return [
                 'locale_based' => true,
             ],
             [
-                'name' => 'stripe_sandbox_api_key',
+                'name' => 'sandbox_api_key',
                 'title' => 'stripe::app.stripe.system.sandbox-client-secret',
                 'info' => 'stripe::app.stripe.system.sandbox-client-secret-info',
                 'type' => 'password',

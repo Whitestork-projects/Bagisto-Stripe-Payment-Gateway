@@ -3,6 +3,7 @@
 namespace Webkul\Stripe\Http\Controllers;
 
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Support\Facades\Config;
 use Stripe\Checkout\Session;
 use Stripe\Stripe;
 use Webkul\Checkout\Facades\Cart;
@@ -28,61 +29,98 @@ class PaymentController extends Controller
         //
     }
 
+    protected function initStripeSdk()
+    {
+        $cart = Cart::getCart();
+        $stripeProviderClass = app(Config::get('payment_methods.stripe.class'));
+        $key = $stripeProviderClass->getConfigData('api_key');
+        $sandboxUserIds = explode(",", $stripeProviderClass->getConfigData('sandbox_allowed_users') ?? "");
+        if ($stripeProviderClass->getConfigData('sandbox') || in_array($cart->customer_id, $sandboxUserIds)) {
+            $key = $stripeProviderClass->getConfigData('sandbox_api_key');
+        }
+        Stripe::setApiKey($key);
+    }
+
     /**
      * Redirects to the Stripe server.
      */
     public function redirect(): RedirectResponse
     {
-        $cart = Cart::getCart();
-        Stripe::setApiKey(core()->getConfigData('sales.payment_methods.stripe.stripe_api_key'));
-        $checkoutSession = Session::create([
-            'line_items' => [[
-                'price_data' => [
-                    'currency' => $cart->global_currency_code,
-                    'product_data' => [
-                        'name' => 'Stripe Checkout Payment order id - ' . $cart->id,
-                    ],
-                    'unit_amount' => $cart->grand_total * 100,
-                ],
-                'quantity' => 1,
-            ]],
-            'mode' => 'payment',
-            'success_url' => route('stripe.success'),
-            'cancel_url' => route('stripe.cancel'),
-        ]);
+        try {
 
-        return redirect()->away($checkoutSession->url);
+            $this->validateOrder();
+            $this->initStripeSdk();
+            $cart = Cart::getCart();
+            $checkoutSession = Session::create([
+                'line_items' => [[
+                    'price_data' => [
+                        'currency' => $cart->global_currency_code,
+                        'product_data' => [
+                            'name' => 'Stripe Checkout Payment order id - ' . $cart->id,
+                        ],
+                        'unit_amount' => $cart->grand_total * 100,
+                    ],
+                    'quantity' => 1,
+                ]],
+                'mode' => 'payment',
+                'success_url' => route('stripe.success', ['cartId' => $cart->id]),
+                'cancel_url' => route('stripe.cancel'),
+                'metadata' => [
+                    'cart_id' => $cart->id,
+                    "customer_email" => $cart->customer_email,
+                    "customer_first_name" => $cart->customer_first_name,
+                    "customer_last_name" => $cart->customer_last_name,
+                    "customer_id" => $cart->customer_id,
+                ]
+            ]);
+            session(['checkout_' . $cart->id => $checkoutSession->id]);
+            Cart::deActivateCart();
+            return redirect()->away($checkoutSession->url);
+        } catch (\Exception $exception) {
+            session()->flash('error', $exception->getMessage());
+            return redirect()->route('shop.checkout.cart.index');
+        }
     }
 
     /**
      * Place an order and redirect to the success page.
      */
-    public function success(): RedirectResponse
+    public function success($cartId): RedirectResponse
     {
-        Cart::collectTotals();
 
-        $order = $this->orderRepository->create(Cart::prepareDataForOrder());
-
-        if ($order->canInvoice()) {
-            $this->invoiceRepository->create($this->prepareInvoiceData($order));
+        try {
+            Cart::activateCart($cartId);
+            $this->initStripeSdk();
+            $sessionId = session()->get('checkout_' . $cartId);
+            if (empty($sessionId)) {
+                throw new \Exception('session not found');
+            }
+            Cart::collectTotals();
+            $cart = Cart::getCart();
+            $paymentSession = Session::retrieve($sessionId);
+            if ($paymentSession->status != 'complete') {
+                throw new \Exception('payment not completed');
+            }
+            $data = (new OrderResource($cart))->jsonSerialize();
+            $order = $this->orderRepository->create($data);
+            $this->orderRepository->update(['status' => 'processing'], $order->id);
+            if ($order->canInvoice()) {
+                $this->invoiceRepository->create($this->prepareInvoiceData($order));
+            }
+            Cart::removeCart($cart);
+            session()->flash('order_id', $order->id);
+            return redirect()->route('shop.checkout.onepage.success');
+        } catch (\Exception $exception) {
+            dd($exception);
+            session()->flash('error', $exception->getMessage());
+            return redirect()->route('shop.checkout.cart.index');
         }
 
-        Cart::deActivateCart();
-
-        session()->flash('order_id', $order->id);
-
-        return redirect()->route('shop.checkout.onepage.success');
     }
 
-    /**
-     * Prepares order's invoice data for creation.
-     */
-    protected function prepareInvoiceData($order): array
+    protected function prepareInvoiceData($order)
     {
-        $invoiceData = [
-            'order_id' => $order->id,
-            'invoice' => ['items' => []],
-        ];
+        $invoiceData = ['order_id' => $order->id];
 
         foreach ($order->items as $item) {
             $invoiceData['invoice']['items'][$item->id] = $item->qty_to_invoice;
@@ -95,5 +133,38 @@ class PaymentController extends Controller
     {
         session()->flash('error', __('stripe::app.stripe.shop.payment_failed'));
         return redirect()->route('shop.checkout.cart.index');
+    }
+
+    protected function validateOrder()
+    {
+        $cart = Cart::getCart();
+
+        $minimumOrderAmount = (float) core()->getConfigData('sales.order_settings.minimum_order.minimum_order_amount') ?: 0;
+
+        if (! Cart::haveMinimumOrderAmount()) {
+            throw new \Exception(trans('shop::app.checkout.cart.minimum-order-message', ['amount' => core()->currency($minimumOrderAmount)]));
+        }
+
+        if (
+            $cart->haveStockableItems()
+            && ! $cart->shipping_address
+        ) {
+            throw new \Exception(trans('shop::app.checkout.cart.check-shipping-address'));
+        }
+
+        if (! $cart->billing_address) {
+            throw new \Exception(trans('shop::app.checkout.cart.check-billing-address'));
+        }
+
+        if (
+            $cart->haveStockableItems()
+            && ! $cart->selected_shipping_rate
+        ) {
+            throw new \Exception(trans('shop::app.checkout.cart.specify-shipping-method'));
+        }
+
+        if (! $cart->payment) {
+            throw new \Exception(trans('shop::app.checkout.cart.specify-payment-method'));
+        }
     }
 }

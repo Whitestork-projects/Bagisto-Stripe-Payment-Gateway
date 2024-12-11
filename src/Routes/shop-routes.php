@@ -10,7 +10,7 @@ Route::group(['middleware' => ['web', 'theme', 'locale', 'currency']], function 
      */
     Route::get('/stripe-redirect', [PaymentController::class, 'redirect'])->name('stripe.process');
 
-    Route::get('/stripe-success', [PaymentController::class, 'success'])->name('stripe.success');
+    Route::get('/stripe-success/{cartId}', [PaymentController::class, 'success'])->name('stripe.success');
 
     Route::get('/stripe-cancel', [PaymentController::class, 'failure'])->name('stripe.cancel');
 });
