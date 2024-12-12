@@ -14,7 +14,7 @@
     "minimum-stability": "dev",
     "support": {
         "source": "https://github.com/Whitestork-projects/Bagisto-Stripe-Payment-Gateway",
-        "issues": "https://github.com/Whitestork-projects/Bagisto-Stripe-Payment-Gateway/issues",
+        "issues": "https://github.com/Whitestork-projects/Bagisto-Stripe-Payment-Gateway/issues"
     },
     "require": {
         "stripe/stripe-php": "^14.2"
