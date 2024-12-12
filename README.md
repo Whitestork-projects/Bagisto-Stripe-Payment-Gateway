@@ -75,8 +75,3 @@ php artisan optimize
 ```
 http://localhost:8000/admin/configuration/sales/payment_methods
 ```
-
-> That's it, now just execute the project on your specified domain.
-
-## How to contribute
-Stripe Payment Gateway is always open for direct contributions. Contributions can be in the form of design suggestions, documentation improvements, new component suggestions, code improvements, adding new features or fixing problems. For more information please check our [Contribution Guideline document.](https://github.com/codenteq/stripe-payment-gateway/blob/master/CONTRIBUTING.md)
