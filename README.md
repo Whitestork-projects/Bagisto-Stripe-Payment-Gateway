@@ -16,13 +16,23 @@ Install this package now to receive secure payments in your online store. Stripe
 
 ## 3. Installation:
 
-- Run the following command
+- Add this following line in composer.json
 ```
-composer require codenteq/stripe-payment-gateway
+ "repositories": [
+        {
+            "type": "vcs",
+            "url": "https://github.com/Whitestork-projects/Bagisto-Stripe-Payment-Gateway"
+        }
+    ],
+```
+- then add this line in require in composer.json
+```
+  "whitestork/bagisto-stripe-payment-gateway": "dev-master"
 ```
 
 - Run these commands below to complete the setup
 ```
+composer updated
 composer dump-autoload
 ```
 
@@ -34,11 +44,6 @@ php artisan optimize
 - Go to the Bagisto admin panel, find the Stripe payment gateway, enter your API key and start receiving payments.
 ```
 http://localhost:8000/admin/configuration/sales/payment_methods
-```
-
-- To use the demo API key, paste the key into the Stripe Client Secret section.
-```
-sk_test_4eC39HqLyjWDarjtT1zdp7dc
 ```
 
 ## Installation without composer:
@@ -69,11 +74,6 @@ php artisan optimize
 - Go to the Bagisto admin panel, find the Stripe payment gateway, enter your API key and start receiving payments.
 ```
 http://localhost:8000/admin/configuration/sales/payment_methods
-```
-
-- To use the demo API key, paste the key into the Stripe Client Secret section.
-```
-sk_test_4eC39HqLyjWDarjtT1zdp7dc
 ```
 
 > That's it, now just execute the project on your specified domain.
