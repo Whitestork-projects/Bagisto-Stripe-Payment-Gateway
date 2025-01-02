@@ -5,11 +5,13 @@ namespace Webkul\Stripe\Http\Controllers;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Config;
 use Stripe\Checkout\Session;
+use Stripe\Refund;
 use Stripe\Stripe;
 use Webkul\Checkout\Facades\Cart;
 use Webkul\Sales\Repositories\InvoiceRepository;
 use Webkul\Sales\Repositories\OrderRepository;
 use Webkul\Sales\Transformers\OrderResource;
+use Illuminate\Http\Request;
 
 class PaymentController extends Controller
 {
@@ -85,9 +87,8 @@ class PaymentController extends Controller
     /**
      * Place an order and redirect to the success page.
      */
-    public function success($cartId): RedirectResponse
+    public function success($cartId, Request $request): RedirectResponse
     {
-
         try {
             Cart::activateCart($cartId);
             $this->initStripeSdk();
@@ -101,17 +102,18 @@ class PaymentController extends Controller
             if ($paymentSession->status != 'complete') {
                 throw new \Exception('payment not completed');
             }
+            $request->mergeIfMissing(['orderData' => ['session_id' => $paymentSession->id, 'payment_intent' => $paymentSession->payment_intent]]);
             $data = (new OrderResource($cart))->jsonSerialize();
             $order = $this->orderRepository->create($data);
-            $this->orderRepository->update(['status' => 'processing'], $order->id);
-            if ($order->canInvoice()) {
-                $this->invoiceRepository->create($this->prepareInvoiceData($order));
-            }
+//            dd($order);
+//            $this->orderRepository->update(['status' => 'processing'], $order->id);
+//            if ($order->canInvoice()) {
+//                $this->invoiceRepository->create($this->prepareInvoiceData($order));
+//            }
             Cart::removeCart($cart);
             session()->flash('order_id', $order->id);
             return redirect()->route('shop.checkout.onepage.success');
         } catch (\Exception $exception) {
-            dd($exception);
             session()->flash('error', $exception->getMessage());
             return redirect()->route('shop.checkout.cart.index');
         }
@@ -139,32 +141,60 @@ class PaymentController extends Controller
     {
         $cart = Cart::getCart();
 
-        $minimumOrderAmount = (float) core()->getConfigData('sales.order_settings.minimum_order.minimum_order_amount') ?: 0;
+        $minimumOrderAmount = (float)core()->getConfigData('sales.order_settings.minimum_order.minimum_order_amount') ?: 0;
 
-        if (! Cart::haveMinimumOrderAmount()) {
+        if (!Cart::haveMinimumOrderAmount()) {
             throw new \Exception(trans('shop::app.checkout.cart.minimum-order-message', ['amount' => core()->currency($minimumOrderAmount)]));
         }
 
         if (
             $cart->haveStockableItems()
-            && ! $cart->shipping_address
+            && !$cart->shipping_address
         ) {
             throw new \Exception(trans('shop::app.checkout.cart.check-shipping-address'));
         }
 
-        if (! $cart->billing_address) {
+        if (!$cart->billing_address) {
             throw new \Exception(trans('shop::app.checkout.cart.check-billing-address'));
         }
 
         if (
             $cart->haveStockableItems()
-            && ! $cart->selected_shipping_rate
+            && !$cart->selected_shipping_rate
         ) {
             throw new \Exception(trans('shop::app.checkout.cart.specify-shipping-method'));
         }
 
-        if (! $cart->payment) {
+        if (!$cart->payment) {
             throw new \Exception(trans('shop::app.checkout.cart.specify-payment-method'));
         }
+    }
+
+    public function cancel($order)
+    {
+        $this->initStripeSdk();
+        $payment = $this->isValidStripePayment($order);
+        if ($payment) {
+            Refund::create(['payment_intent' => $payment->additional['payment_intent']]);
+        }
+    }
+
+    public function refund($refund)
+    {
+        $this->initStripeSdk();
+        $payment = $this->isValidStripePayment($refund?->order);
+        if ($payment) {
+            Refund::create(['payment_intent' => $payment->additional['payment_intent'], 'amount' => ($refund->order->base_grand_total - $refund->base_grand_total) * 100]);
+        }
+    }
+
+
+    protected function isValidStripePayment($order)
+    {
+        $payment = $order?->payment;
+        if ($payment?->method == "stripe" && $payment?->additional['payment_intent']) {
+            return $payment;
+        }
+        return false;
     }
 }
